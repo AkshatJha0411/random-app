@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,8 @@ export default function StartWorkoutScreen() {
   const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
   const { user } = useAuth();
   const router = useRouter();
+  const isMountedRef = useRef(true);
+  
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [exercises, setExercises] = useState<ExerciseWithSets[]>([]);
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
@@ -40,24 +42,51 @@ export default function StartWorkoutScreen() {
   const [showAddExercise, setShowAddExercise] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Early return if workoutId is not available
+  if (!workoutId || typeof workoutId !== 'string') {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Invalid workout ID</Text>
+        <TouchableOpacity
+          style={styles.backToWorkoutsButton}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.backToWorkoutsText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   useEffect(() => {
+    // Set mounted flag to true when component mounts
+    isMountedRef.current = true;
+    
     console.log('useEffect: workoutId is', workoutId, 'user is', user);
     if (workoutId && user?.email) {
       loadWorkout();
       loadAllExercises();
     }
+
+    // Cleanup function to prevent state updates on unmounted component
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [workoutId, user]);
 
   useEffect(() => {
     // Filter exercises based on search query
     if (searchQuery.trim() === '') {
-      setFilteredExercises(allExercises);
+      if (isMountedRef.current) {
+        setFilteredExercises(allExercises);
+      }
     } else {
       const filtered = allExercises.filter(exercise =>
         exercise.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         exercise.target_muscle_group.toLowerCase().includes(searchQuery.toLowerCase())
       );
-      setFilteredExercises(filtered);
+      if (isMountedRef.current) {
+        setFilteredExercises(filtered);
+      }
     }
   }, [searchQuery, allExercises]);
 
@@ -74,7 +103,10 @@ export default function StartWorkoutScreen() {
 
     try {
       console.log('Loading workout with ID:', workoutId);
-      setErrorMsg(null);
+      if (isMountedRef.current) {
+        setErrorMsg(null);
+      }
+      
       // First, get the workout details
       const { data: workoutData, error: workoutError } = await supabase
         .from('workouts')
@@ -85,11 +117,15 @@ export default function StartWorkoutScreen() {
       console.log('Workout fetch result:', { workoutData, workoutError });
 
       if (workoutError) {
-        setErrorMsg('Workout fetch error: ' + workoutError.message);
+        if (isMountedRef.current) {
+          setErrorMsg('Workout fetch error: ' + workoutError.message);
+        }
         throw workoutError;
       }
 
-      setWorkout(workoutData);
+      if (isMountedRef.current) {
+        setWorkout(workoutData);
+      }
 
       // Then get the workout exercises with exercise details
       const { data: workoutExercisesData, error: exercisesError } = await supabase
@@ -114,12 +150,16 @@ export default function StartWorkoutScreen() {
       console.log('Workout exercises fetch result:', { workoutExercisesData, exercisesError });
 
       if (exercisesError) {
-        setErrorMsg('Exercises fetch error: ' + exercisesError.message);
+        if (isMountedRef.current) {
+          setErrorMsg('Exercises fetch error: ' + exercisesError.message);
+        }
         throw exercisesError;
       }
 
       if (!workoutExercisesData || workoutExercisesData.length === 0) {
-        setErrorMsg('No exercises found for this workout.');
+        if (isMountedRef.current) {
+          setErrorMsg('No exercises found for this workout.');
+        }
       }
 
       // Transform the data to include sets
@@ -129,12 +169,18 @@ export default function StartWorkoutScreen() {
         sets: [{ id: '1', weight: '0', reps: '0' }], // Default one set
       })) || [];
 
-      setExercises(workoutExercises);
+      if (isMountedRef.current) {
+        setExercises(workoutExercises);
+      }
     } catch (error: any) {
       console.error('Error loading workout:', error);
-      setErrorMsg('Error loading workout: ' + (error?.message || error));
+      if (isMountedRef.current) {
+        setErrorMsg('Error loading workout: ' + (error?.message || error));
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
       console.log('setLoading(false) called');
     }
   };
@@ -147,14 +193,19 @@ export default function StartWorkoutScreen() {
         .order('name');
 
       if (error) throw error;
-      setAllExercises(data || []);
-      setFilteredExercises(data || []);
+      
+      if (isMountedRef.current) {
+        setAllExercises(data || []);
+        setFilteredExercises(data || []);
+      }
     } catch (error) {
       console.error('Error loading exercises:', error);
     }
   };
 
   const addSet = (exerciseIndex: number) => {
+    if (!isMountedRef.current) return;
+    
     setExercises(prev => prev.map((exercise, index) => {
       if (index === exerciseIndex) {
         const newSetId = (exercise.sets.length + 1).toString();
@@ -168,6 +219,8 @@ export default function StartWorkoutScreen() {
   };
 
   const removeSet = (exerciseIndex: number, setIndex: number) => {
+    if (!isMountedRef.current) return;
+    
     setExercises(prev => prev.map((exercise, index) => {
       if (index === exerciseIndex && exercise.sets.length > 1) {
         return {
@@ -180,6 +233,8 @@ export default function StartWorkoutScreen() {
   };
 
   const updateSet = (exerciseIndex: number, setIndex: number, field: 'weight' | 'reps', value: string) => {
+    if (!isMountedRef.current) return;
+    
     setExercises(prev => prev.map((exercise, index) => {
       if (index === exerciseIndex) {
         return {
@@ -197,6 +252,8 @@ export default function StartWorkoutScreen() {
   };
 
   const addExerciseToWorkout = (exercise: Exercise) => {
+    if (!isMountedRef.current) return;
+    
     const newExercise: ExerciseWithSets = {
       ...exercise,
       order_index: exercises.length + 1,
@@ -217,7 +274,9 @@ export default function StartWorkoutScreen() {
           text: 'Remove',
           style: 'destructive',
           onPress: () => {
-            setExercises(prev => prev.filter((_, index) => index !== exerciseIndex));
+            if (isMountedRef.current) {
+              setExercises(prev => prev.filter((_, index) => index !== exerciseIndex));
+            }
           }
         }
       ]
@@ -225,7 +284,7 @@ export default function StartWorkoutScreen() {
   };
 
   const saveWorkout = async () => {
-    if (!user?.email) return;
+    if (!user?.email || !isMountedRef.current) return;
 
     setSaving(true);
     try {
@@ -276,7 +335,9 @@ export default function StartWorkoutScreen() {
       console.error('Error saving workout:', error);
       Alert.alert('Error', 'Failed to save workout');
     } finally {
-      setSaving(false);
+      if (isMountedRef.current) {
+        setSaving(false);
+      }
     }
   };
 
@@ -310,8 +371,10 @@ export default function StartWorkoutScreen() {
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => {
-              setShowAddExercise(false);
-              setSearchQuery('');
+              if (isMountedRef.current) {
+                setShowAddExercise(false);
+                setSearchQuery('');
+              }
             }}
           >
             <ArrowLeft size={24} color="#6B7280" />
@@ -327,7 +390,11 @@ export default function StartWorkoutScreen() {
               style={styles.searchInput}
               placeholder="Search exercises..."
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={(text) => {
+                if (isMountedRef.current) {
+                  setSearchQuery(text);
+                }
+              }}
             />
           </View>
         </View>
@@ -465,7 +532,11 @@ export default function StartWorkoutScreen() {
             <Text style={styles.emptyStateText}>Add some exercises to get started</Text>
             <TouchableOpacity
               style={styles.addFirstExerciseButton}
-              onPress={() => setShowAddExercise(true)}
+              onPress={() => {
+                if (isMountedRef.current) {
+                  setShowAddExercise(true);
+                }
+              }}
             >
               <Plus size={20} color="#FFFFFF" />
               <Text style={styles.addFirstExerciseText}>Add First Exercise</Text>
@@ -475,7 +546,11 @@ export default function StartWorkoutScreen() {
         ListFooterComponent={() => (
           <TouchableOpacity
             style={styles.addExerciseButton}
-            onPress={() => setShowAddExercise(true)}
+            onPress={() => {
+              if (isMountedRef.current) {
+                setShowAddExercise(true);
+              }
+            }}
           >
             <Plus size={20} color="#3B82F6" />
             <Text style={styles.addExerciseText}>Add Exercise</Text>
