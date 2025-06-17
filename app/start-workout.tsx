@@ -58,25 +58,35 @@ export default function StartWorkoutScreen() {
   }
 
   useEffect(() => {
-    // Set mounted flag to true when component mounts
+    let isActive = true;
     isMountedRef.current = true;
     
     console.log('useEffect: workoutId is', workoutId, 'user is', user);
-    if (workoutId && user?.email) {
-      loadWorkout();
-      loadAllExercises();
-    }
+    
+    const loadData = async () => {
+      if (workoutId && user?.email && isActive) {
+        await Promise.all([
+          loadWorkout(isActive),
+          loadAllExercises(isActive)
+        ]);
+      }
+    };
+
+    loadData();
 
     // Cleanup function to prevent state updates on unmounted component
     return () => {
+      isActive = false;
       isMountedRef.current = false;
     };
   }, [workoutId, user]);
 
   useEffect(() => {
+    let isActive = true;
+    
     // Filter exercises based on search query
     if (searchQuery.trim() === '') {
-      if (isMountedRef.current) {
+      if (isActive && isMountedRef.current) {
         setFilteredExercises(allExercises);
       }
     } else {
@@ -84,13 +94,17 @@ export default function StartWorkoutScreen() {
         exercise.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         exercise.target_muscle_group.toLowerCase().includes(searchQuery.toLowerCase())
       );
-      if (isMountedRef.current) {
+      if (isActive && isMountedRef.current) {
         setFilteredExercises(filtered);
       }
     }
+
+    return () => {
+      isActive = false;
+    };
   }, [searchQuery, allExercises]);
 
-  const loadWorkout = async () => {
+  const loadWorkout = async (isActive: boolean = true) => {
     console.log('loadWorkout called');
     if (!workoutId) {
       console.log('Early return: no workoutId');
@@ -103,7 +117,7 @@ export default function StartWorkoutScreen() {
 
     try {
       console.log('Loading workout with ID:', workoutId);
-      if (isMountedRef.current) {
+      if (isActive && isMountedRef.current) {
         setErrorMsg(null);
       }
       
@@ -117,13 +131,13 @@ export default function StartWorkoutScreen() {
       console.log('Workout fetch result:', { workoutData, workoutError });
 
       if (workoutError) {
-        if (isMountedRef.current) {
+        if (isActive && isMountedRef.current) {
           setErrorMsg('Workout fetch error: ' + workoutError.message);
         }
         throw workoutError;
       }
 
-      if (isMountedRef.current) {
+      if (isActive && isMountedRef.current) {
         setWorkout(workoutData);
       }
 
@@ -150,14 +164,14 @@ export default function StartWorkoutScreen() {
       console.log('Workout exercises fetch result:', { workoutExercisesData, exercisesError });
 
       if (exercisesError) {
-        if (isMountedRef.current) {
+        if (isActive && isMountedRef.current) {
           setErrorMsg('Exercises fetch error: ' + exercisesError.message);
         }
         throw exercisesError;
       }
 
       if (!workoutExercisesData || workoutExercisesData.length === 0) {
-        if (isMountedRef.current) {
+        if (isActive && isMountedRef.current) {
           setErrorMsg('No exercises found for this workout.');
         }
       }
@@ -169,23 +183,23 @@ export default function StartWorkoutScreen() {
         sets: [{ id: '1', weight: '0', reps: '0' }], // Default one set
       })) || [];
 
-      if (isMountedRef.current) {
+      if (isActive && isMountedRef.current) {
         setExercises(workoutExercises);
       }
     } catch (error: any) {
       console.error('Error loading workout:', error);
-      if (isMountedRef.current) {
+      if (isActive && isMountedRef.current) {
         setErrorMsg('Error loading workout: ' + (error?.message || error));
       }
     } finally {
-      if (isMountedRef.current) {
+      if (isActive && isMountedRef.current) {
         setLoading(false);
       }
       console.log('setLoading(false) called');
     }
   };
 
-  const loadAllExercises = async () => {
+  const loadAllExercises = async (isActive: boolean = true) => {
     try {
       const { data, error } = await supabase
         .from('exercises')
@@ -194,7 +208,7 @@ export default function StartWorkoutScreen() {
 
       if (error) throw error;
       
-      if (isMountedRef.current) {
+      if (isActive && isMountedRef.current) {
         setAllExercises(data || []);
         setFilteredExercises(data || []);
       }

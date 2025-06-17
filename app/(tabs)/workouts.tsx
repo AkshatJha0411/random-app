@@ -67,10 +67,21 @@ export default function WorkoutsScreen() {
   };
 
   const handleStartWorkout = (workout: WorkoutWithExercises) => {
-    router.push({
-      pathname: '/start-workout',
-      params: { workoutId: workout.id }
-    });
+    // Validate workout ID before navigation
+    if (!workout?.id || typeof workout.id !== 'string' || workout.id.trim() === '') {
+      Alert.alert('Error', 'Invalid workout selected. Please try again.');
+      return;
+    }
+
+    try {
+      router.push({
+        pathname: '/start-workout',
+        params: { workoutId: workout.id }
+      });
+    } catch (error) {
+      console.error('Navigation error:', error);
+      Alert.alert('Error', 'Failed to start workout. Please try again.');
+    }
   };
 
   const renderWorkoutCard = (workout: WorkoutWithExercises) => {
